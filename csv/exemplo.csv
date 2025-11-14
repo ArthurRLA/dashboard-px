@@ -1,0 +1,14 @@
+Tipo_de_Registro,Codigo,Produto,Penetracao_Produto,Realizado_Equipe,Produtos_Alisson,Produtos_Lenilson,Produtos_Gustavo,Produtos_WAndrade,Produtos_Nilton,Produtos_Odair,Custo_Produto,Venda_Estimada,Margem_Estimada,VO_OS_Alisson,VO_OS_Lenilson,VO_OS_Gustavo,VO_OS_WAndrade,VO_OS_Nilton,VO_OS_Odair,Venda_RS_Alisson,Venda_RS_Lenilson,Venda_RS_Gustavo,Venda_RS_WAndrade,Venda_RS_Nilton,Venda_RS_Odair,TKT_Medio_Alisson,TKT_Medio_Lenilson,TKT_Medio_Gustavo,TKT_Medio_WAndrade,TKT_Medio_Nilton,TKT_Medio_Odair,Performance_Alisson,Performance_Lenilson,Performance_Gustavo,Performance_WAndrade,Performance_Nilton,Performance_Odair,Share_Alisson,Share_Lenilson,Share_Gustavo,Share_WAndrade,Share_Nilton,Share_Odair
+Produto,CR-7451,CONJUNTO LUBRIFICACAO POWER X 3,53.66,22,4,3,2,4,6,3,35.90,89.90,60.07,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,LV2-100,LIMPA VIDROS POWER X,73.17,30,3,5,6,5,4,7,6.10,25.90,76.45,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,PAP-500,SOLUCAO ANTICORROSIVA POWER X AZL,131.71,54,12,9,9,11,8,5,20.68,49.90,58.56,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,PX-1007,POWER RENEW-VERNIZ POWER X 250M,87.80,36,2,4,12,6,5,7,39.33,109.90,64.21,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,PX-2001,BIO AIR CLEANER AR CONDICIONADO,156.10,64,10,14,8,11,9,12,76.89,239.90,67.95,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,PX-3001,POWER LCI GDI 500ML,109.76,45,5,8,8,11,7,6,65.14,239.90,72.85,,,,,,,,,,,,,,,,,,,,,,,,
+Produto,PX-2005,AIR TREATMENT,85.37,35,4,3,6,8,8,6,34.14,109.90,68.94,,,,,,,,,,,,,,,,,,,,,,,,
+Total,TOTAL DE PRODUTOS,,,,,40,46,51,56,47,46,278.18,865.30,67.85,,,,,,,,,,,,,,,,,,,,,,,,
+Total,TOTAL DE VO+V1O.S. FECHADA,,,,,40,39,44,38,39,42,,,,41,40,39,44,38,39,42,,,,,,,,,,,,
+Total,TOTAL VENDA RS,,,,,,,,,39401.40,5294.00,6895.40,6600.90,2592.09,2470.90,6447.40,,,,,,,,,,,,,
+Total,TKT MÉDIO SELL OUT,,,,,,,,,,,,,,,,,,,961.01,132.35,176.81,150.02,68.21,63.36,153.51,,,,,
+Total,PERFORMANCE,,,,,,,,,,,,,,,,,,,,,,6.98,1.00,1.18,1.16,1.47,1.21,1.10,,,,,,
+Total,SHARE/PRODUTOS POR C.T,,,,,,,,,,,,,,,,,,,,,,,,13.99,16.08,17.83,19.58,16.43,16.08
