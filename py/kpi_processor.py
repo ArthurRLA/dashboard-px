@@ -8,6 +8,13 @@ KPI_PREFIXES = {
     "TKT_Medio_": "TICKET MÉDIO"
 }
 
+COLUMN_NAME_MAP = {
+    "TOTAL DE PRODUTOS": "Total_Produtos",
+    "PERFORMANCE": "Performance", 
+    "VENDA R$": "Venda_RS",
+    "TICKET MÉDIO": "Ticket_Medio"
+}
+
 def identify_dynamic_metadata(df_columns: pd.Index):
     """
     Analisa as colunas do DF MESTRE (combinado) para identificar a união de todos 
@@ -28,15 +35,16 @@ def identify_dynamic_metadata(df_columns: pd.Index):
     
     # 2. Construir o Mapa de KPI Dinâmico
     for prefix, kpi_name in KPI_PREFIXES.items():
-        cols_for_kpi = [col for col in df_columns if col.startswith(prefix)]
-        # Cria um nome de coluna limpo para o DataFrame de série
-        new_col_name = kpi_name.replace(' ', '_').replace('R$', 'RS').replace('TKT_', 'Ticket_')
-        
-        dynamic_kpi_map[kpi_name] = {
-            'cols': cols_for_kpi, 
-            'new_col': new_col_name,
-            'alias': kpi_name 
-        }
+            cols_for_kpi = [col for col in df_columns if col.startswith(prefix)]
+            
+            # Uso do mapa para garantir a nomenclatura correta
+            new_col_name = COLUMN_NAME_MAP.get(kpi_name, kpi_name.replace(' ', '_')) 
+
+            dynamic_kpi_map[kpi_name] = {
+                'cols': cols_for_kpi, 
+                'new_col': new_col_name, # Este new_col_name agora é 'Performance'
+                'alias': kpi_name 
+            }
 
     return consultores_da_regiao, dynamic_kpi_map
 
