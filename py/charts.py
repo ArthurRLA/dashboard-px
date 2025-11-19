@@ -60,13 +60,18 @@ def create_performance_chart(df_performance: pd.DataFrame, consultor_selecionado
     return fig_performance
 
 def create_penetracao_chart(df_produtos: pd.DataFrame) -> go.Figure:
-    """Cria o gráfico de pizza de Penetração Produto/OS."""
+    # Detecta qual coluna usar
+    if 'Descricao' in df_produtos.columns:
+        col_produto = 'Descricao'
+    elif 'Produto' in df_produtos.columns:
+        col_produto = 'Produto'
+    
     fig_penetracao = px.pie(
         df_produtos,
-        names='Produto',
+        names=col_produto,  # ✅ Usa a coluna detectada
         values='Penetracao_Produto',
-        title='Penetração produto/OS (Dados Brutos Agregados)',
-        hole=.3, 
+        title='Penetração produto/OS',
+        hole=.3,
         height=450
     )
     fig_penetracao.update_traces(textposition='inside', textinfo='percent+label')
