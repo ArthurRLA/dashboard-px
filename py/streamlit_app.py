@@ -6,8 +6,13 @@ Adaptado para trabalhar com dados transacionais do Excel.
 import streamlit as st
 import pandas as pd
 
-# Imports dos novos módulos
-from data_loader import load_shop_config, load_data
+from data_loader import (
+    load_shop_config, 
+    load_data, 
+    extrair_periodos_disponiveis,
+    load_and_combine_data
+)
+
 from kpi_processor import (
     create_kpi_dataframe_map,
     calculate_kpis_chave,
@@ -18,15 +23,9 @@ from charts import (
     create_ranking_chart,
     create_produtos_chart,
     create_performance_chart,
-    create_penetracao_chart
+    create_penetracao_chart,
+    create_evolucao_temporal_chart
 )
-
-# ==============================================================================
-# 0. CONFIGURAÇÃO
-# ==============================================================================
-
-MESES = ['Janeiro/25', 'Fevereiro/25', 'Março/25', 'Abril/25']
-
 # ==============================================================================
 # 1. SIDEBAR - FILTROS DE REGIÃO E LOJAS
 # ==============================================================================
@@ -59,17 +58,69 @@ for loja in lojas_selecionadas:
     config = shop_config_hierarchical[regiao_selecionada][loja].copy()
     config['name'] = loja
     loja_configs.append(config)
+    
+    
+# ==============================================================================
+# CARREGAMENTO INICIAL (Sem Filtro de Período)
+# ==============================================================================
 
 # ==============================================================================
-# 2. CARREGAMENTO DE DADOS
+# 2.5. CARREGAMENTO INICIAL PARA EXTRAÇÃO DE PERÍODOS
 # ==============================================================================
 
 if not loja_configs:
     st.warning("⚠️ Selecione pelo menos uma loja para visualizar os dados.")
     st.stop()
 
-# Carrega dados (com cache)
-df_metricas_vendedor, df_metricas_produto, lista_consultores = load_data(loja_configs)
+# Carrega apenas o df_master para extrair períodos (sem agregação pesada)
+from data_loader import load_and_combine_data
+
+df_master_completo = load_and_combine_data(loja_configs)
+
+if df_master_completo is None or df_master_completo.empty:
+    st.error("❌ Não foi possível carregar dados das lojas selecionadas.")
+    st.stop()
+
+# Extrai períodos disponíveis do DataFrame master
+periodos_values, periodos_labels = extrair_periodos_disponiveis(df_master_completo)
+
+if not periodos_labels:
+    st.error("❌ Nenhum período válido encontrado nos dados. Verifique a coluna 'Mes' no arquivo XLSX.")
+    st.stop()
+
+# ==============================================================================
+# 2.6. FILTRO DE PERÍODO (Sidebar)
+# ==============================================================================
+
+st.sidebar.markdown('---')
+st.sidebar.subheader('Período de Análise')
+
+periodos_selecionados_labels = st.sidebar.multiselect(
+    'Selecionar Mês(es)',
+    options=periodos_labels,
+    default=[periodos_labels[-1]],  # Último mês como padrão
+    help='Selecione um ou mais períodos para análise'
+)
+
+# Converte labels de volta para Period objects
+if periodos_selecionados_labels:
+    periodos_selecionados = [
+        periodos_values[periodos_labels.index(label)]
+        for label in periodos_selecionados_labels
+    ]
+else:
+    # Se nada selecionado, usa todos os períodos
+    periodos_selecionados = periodos_values
+    periodos_selecionados_labels = periodos_labels
+
+# ==============================================================================
+# CARREGAMENTO DE DADOS
+# ==============================================================================
+# Carrega dados COM filtro de período
+df_metricas_vendedor, df_metricas_produto, df_metricas_temporais, lista_consultores = load_data(
+    loja_configs, 
+    periodos_selecionados
+)
 
 # Título para exibição
 titulo_lojas = ', '.join(lojas_selecionadas) if len(lojas_selecionadas) < 4 else f"{len(lojas_selecionadas)} Lojas em {regiao_selecionada}"
@@ -102,12 +153,6 @@ kpis_chave = calculate_kpis_chave(df_metricas_vendedor)
 st.sidebar.markdown('---')
 st.sidebar.subheader('Métricas e Visualização')
 
-mes_selecionado = st.sidebar.selectbox(
-    'Período (Fixo)',
-    options=MESES,
-    index=3
-)
-
 # Filtro de consultores (agora baseado nos dados reais)
 consultor_selecionado = st.sidebar.multiselect(
     'Filtrar Consultor(es)',
@@ -135,7 +180,7 @@ plot_height = st.sidebar.slider(
 
 st.title(f'📊 Painel de Indicadores de Vendas POWERX')
 st.subheader(f'Região: {regiao_selecionada} | Lojas: {titulo_lojas}')
-st.caption(f'Dados Consolidados | Período: **{mes_selecionado}**')
+st.caption(f'Dados Consolidado')
 
 st.markdown('---')
 
@@ -254,7 +299,42 @@ with col_info:
         st.warning("Dados de produto indisponíveis.")
 
 # ==============================================================================
-# 11. SEÇÃO DE DEBUG (Expansível)
+# 11. GRÁFICO DE EVOLUÇÃO TEMPORAL
+# ==============================================================================
+
+st.markdown('---')
+st.subheader('📈 Evolução Temporal por Loja')
+
+if not df_metricas_temporais.empty:
+    fig_evolucao = create_evolucao_temporal_chart(df_metricas_temporais)
+    st.plotly_chart(fig_evolucao, use_container_width=True)
+    
+    # Informações adicionais
+    col_info1, col_info2 = st.columns(2)
+    
+    with col_info1:
+        st.info(
+            "**Linhas Sólidas**: Total de Produtos (eixo esquerdo)\n\n"
+            "**Linhas Tracejadas**: Faturamento em R$ (eixo direito)"
+        )
+    
+    with col_info2:
+        # Identifica loja com melhor performance no período
+        loja_top = df_metricas_temporais.groupby('Nome_Loja')['Venda_RS'].sum().idxmax()
+        faturamento_top = df_metricas_temporais.groupby('Nome_Loja')['Venda_RS'].sum().max()
+        
+        st.metric(
+            "🏆 Loja Destaque (Faturamento)",
+            loja_top,
+            f"R$ {faturamento_top:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        )
+else:
+    st.info("ℹ️ Nenhum dado temporal disponível para os períodos selecionados.")
+
+st.markdown('---')
+
+# ==============================================================================
+# 12. SEÇÃO DE DEBUG (Expansível)
 # ==============================================================================
 
 with st.expander("🔍 Debug: Métricas Detalhadas", expanded=False):

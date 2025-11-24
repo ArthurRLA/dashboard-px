@@ -76,3 +76,84 @@ def create_penetracao_chart(df_produtos: pd.DataFrame) -> go.Figure:
     )
     fig_penetracao.update_traces(textposition='inside', textinfo='percent+label')
     return fig_penetracao
+
+def create_evolucao_temporal_chart(df_temporal: pd.DataFrame) -> go.Figure:
+    if df_temporal.empty:
+        # Retorna gráfico vazio
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Nenhum dado disponível para o período selecionado",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        return fig
+    
+    fig = go.Figure()
+    
+    # Cores para as lojas (cicla automaticamente)
+    cores = ['#47C7DA', '#F63366', '#FFA500', '#9B59B6', '#2ECC71', '#E74C3C']
+    
+    lojas = df_temporal['Nome_Loja'].unique()
+    
+    # === ADICIONA LINHAS DE TOTAL DE PRODUTOS (Eixo Esquerdo) ===
+    for i, loja in enumerate(lojas):
+        df_loja = df_temporal[df_temporal['Nome_Loja'] == loja].sort_values('Periodo_Str')
+        
+        fig.add_trace(go.Scatter(
+            x=df_loja['Periodo_Str'],
+            y=df_loja['Total_Produtos'],
+            name=f'{loja} - Produtos',
+            mode='lines+markers',
+            line=dict(color=cores[i % len(cores)], width=2),
+            marker=dict(size=8),
+            yaxis='y1',
+            hovertemplate='<b>%{fullData.name}</b><br>Período: %{x}<br>Produtos: %{y:,.0f}<extra></extra>'
+        ))
+    
+    # === ADICIONA LINHAS DE FATURAMENTO (Eixo Direito) ===
+    for i, loja in enumerate(lojas):
+        df_loja = df_temporal[df_temporal['Nome_Loja'] == loja].sort_values('Periodo_Str')
+        
+        fig.add_trace(go.Scatter(
+            x=df_loja['Periodo_Str'],
+            y=df_loja['Venda_RS'],
+            name=f'{loja} - Faturamento',
+            mode='lines+markers',
+            line=dict(color=cores[i % len(cores)], width=2, dash='dash'),
+            marker=dict(size=8, symbol='square'),
+            yaxis='y2',
+            hovertemplate='<b>%{fullData.name}</b><br>Período: %{x}<br>Faturamento: R$ %{y:,.2f}<extra></extra>'
+        ))
+    
+    # === LAYOUT COM EIXOS DUPLOS ===
+    fig.update_layout(
+        title='📈 Evolução Temporal: Produtos e Faturamento por Loja',
+        xaxis=dict(
+            title='Período',
+            tickangle=-45
+        ),
+        yaxis=dict(
+            title='Total de Produtos',
+            side='left',
+            showgrid=True,
+            gridcolor='rgba(200, 200, 200, 0.2)'
+        ),
+        yaxis2=dict(
+            title='Faturamento (R$)',
+            overlaying='y',
+            side='right',
+            showgrid=False
+        ),
+        hovermode='x unified',
+        legend=dict(
+            orientation='v',
+            yanchor='top',
+            y=1,
+            xanchor='left',
+            x=1.15
+        ),
+        height=500,
+        template='plotly_white'
+    )
+    return fig

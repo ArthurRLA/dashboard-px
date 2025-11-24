@@ -135,7 +135,7 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
         
         # Extrai mês/período se disponível
         if 'Mes' in df.columns:
-            df['Periodo'] = pd.to_datetime(df['Mes'], errors='coerce').dt.to_period('M')
+            df = parse_periodos(df)
         
         # Adiciona coluna de identificação da loja
         if loja_filter:
@@ -238,15 +238,6 @@ def calcular_metricas_produto(df: pd.DataFrame) -> pd.DataFrame:
 # ==============================================================================
 
 def load_and_combine_data(loja_configs: list) -> Optional[pd.DataFrame]:
-    """
-    Lê múltiplos arquivos XLSX e combina em um DataFrame mestre.
-    
-    Args:
-        loja_configs: Lista de dicts com 'path', 'filter', 'name'
-    
-    Returns:
-        DataFrame combinado ou None
-    """
     all_dfs = []
     
     for config in loja_configs:
@@ -272,23 +263,106 @@ def load_and_combine_data(loja_configs: list) -> Optional[pd.DataFrame]:
     
     return df_master
 
+# ==============================================================================
+# 5. FUNÇÕES DE FILTRO TEMPORAL
+# ==============================================================================
+
+def parse_periodos(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Parse da coluna Mes para datetime e extração de período.
+    
+    Args:
+        df: DataFrame com coluna 'Mes' no formato 'ANO/MÊS/DIA'
+    
+    Returns:
+        DataFrame com colunas adicionais: Data, Periodo, Periodo_Display
+    """
+    # Converte para datetime (formato ANO/MÊS/DIA)
+    df['Data'] = pd.to_datetime(df['Mes'], format='%Y-%m-%d', errors='coerce')
+    
+    # Cria coluna de período (ex: 2025-04)
+    df['Periodo'] = df['Data'].dt.to_period('M')
+    
+    # Formato para exibição (ex: Abr/25)
+    df['Periodo_Display'] = df['Data'].dt.strftime('%b/%y')
+    
+    return df
+
+
+def extrair_periodos_disponiveis(df: pd.DataFrame) -> tuple:
+    """
+    Extrai lista ordenada de períodos únicos presentes nos dados.
+    
+    Returns:
+        Tuple: (lista_de_periods, lista_de_labels)
+    """
+    if df.empty or 'Periodo' not in df.columns:
+        return [], []
+    
+    # Remove NaN e pega únicos
+    periodos_unicos = df['Periodo'].dropna().unique()
+    
+    # Ordena
+    periodos_sorted = sorted(periodos_unicos)
+    
+    # Cria labels de exibição com tratamento de erro
+    labels = []
+    for p in periodos_sorted:
+        try:
+            # Tenta formatar como Period
+            labels.append(p.strftime('%b/%y'))
+        except AttributeError:
+            # Fallback: converte para string diretamente
+            labels.append(str(p))
+    
+    return periodos_sorted, labels
+
+def calcular_metricas_temporais(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula métricas agregadas por período e loja.
+    
+    Returns:
+        DataFrame com:
+        - Periodo
+        - Nome_Loja
+        - Total_Produtos
+        - Venda_RS
+    """
+    if df.empty:
+        return pd.DataFrame(columns=['Periodo', 'Nome_Loja', 'Total_Produtos', 'Venda_RS'])
+    
+    # Agregação por período e loja
+    metricas = df.groupby(['Periodo', 'Nome_Loja']).agg({
+        'Quantidade': 'sum',
+        'Valor_Total': 'sum',
+    }).reset_index()
+    
+    metricas.columns = ['Periodo', 'Nome_Loja', 'Total_Produtos', 'Venda_RS']
+    
+    # Converte Periodo para string (necessário para Plotly)
+    metricas['Periodo_Str'] = metricas['Periodo'].astype(str)
+    
+    return metricas
+
 
 # ==============================================================================
 # 5. FUNÇÃO PRINCIPAL (Cached)
 # ==============================================================================
 
 @st.cache_data
-def load_data(loja_configs: list) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
+def load_data(loja_configs: list, periodos_selecionados: list = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str]]:
     """
     Função principal de carregamento e processamento.
     
     Args:
         loja_configs: Lista de configurações de lojas
+        periodos_selecionados: Lista de períodos (Period objects) para filtrar
     
     Returns:
         Tuple com:
         - df_metricas_vendedor: Métricas agregadas por vendedor
         - df_metricas_produto: Métricas agregadas por produto
+        - df_metricas_temporais: Métricas por período e loja
         - lista_consultores: Lista de vendedores únicos
     """
     
@@ -296,13 +370,18 @@ def load_data(loja_configs: list) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]
     df_master = load_and_combine_data(loja_configs)
     
     if df_master is None or df_master.empty:
-        return pd.DataFrame(), pd.DataFrame(), []
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), []
     
-    # 2. Calcula métricas agregadas
+    # 2. Filtra por períodos se especificado
+    if periodos_selecionados:
+        df_master = df_master[df_master['Periodo'].isin(periodos_selecionados)]
+    
+    # 3. Calcula métricas agregadas
     df_metricas_vendedor = calcular_metricas_vendedor(df_master)
     df_metricas_produto = calcular_metricas_produto(df_master)
+    df_metricas_temporais = calcular_metricas_temporais(df_master)
     
-    # 3. Extrai lista de consultores (vendedores únicos)
+    # 4. Extrai lista de consultores (vendedores únicos)
     lista_consultores = sorted(df_master['Vendedor'].unique().tolist())
     
     # Debug info (opcional)
@@ -310,7 +389,7 @@ def load_data(loja_configs: list) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]
         st.write(f"**Total de transações:** {len(df_master)}")
         st.write(f"**Lojas:** {df_master['Nome_Loja'].unique().tolist()}")
         st.write(f"**Vendedores:** {lista_consultores}")
-        st.write(f"**Período:** {df_master.get('Periodo', 'N/A').unique()}")
+        st.write(f"**Períodos:** {df_master['Periodo_Display'].unique().tolist()}")
         st.dataframe(df_master.head(10))
     
-    return df_metricas_vendedor, df_metricas_produto, lista_consultores
+    return df_metricas_vendedor, df_metricas_produto, df_metricas_temporais, lista_consultores
