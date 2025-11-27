@@ -67,7 +67,7 @@ Fecha a aplicação e rode ela de novo com streamlitrun. Depois disso deve apare
 ## Estrutura de Arquivos XLSX
 
 Colunas obrigatórias:
-- Mês (formato: ANO/MÊS/DIA, ex: 2025/04/15)
+- Mês (formato: ANO-MÊS-DIA, ex: 2025-04-15)
 - N° Doc
 - Cliente
 - Vendedor
