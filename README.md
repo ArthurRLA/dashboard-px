@@ -19,6 +19,7 @@ debug_mode = true
 
 ### 3. Adicionar dados
 Algo nesse estilo: 
+```
 data/vendas/
 ├── sp1_mclarty_maia.xlsx
 ├── sp1_jeep_pacaembu.xlsx
