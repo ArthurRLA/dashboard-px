@@ -1,0 +1,43 @@
+# ============================================================================
+# CONFIGURAÇÃO DE LOJAS - PowerX Dashboard
+# ============================================================================
+# Este arquivo define a hierarquia: Região > Loja > Arquivo
+# Pode ser editado sem modificar código
+
+regioes:
+  SP1:
+    nome_completo: "São Paulo - Região 1"
+    lojas:
+      - nome: "McLarty Maia"
+        nome_completo: "McLarty Maia - Mini Pinheiros"
+        arquivo: "sp_mclarty_maia.xlsx"
+        filtro_cliente: "McLarty Maia - Mini Pinheiros"
+        sheet: "Sheet0"
+        ativa: true
+        
+      - nome: "Jeep Pacaembu"
+        nome_completo: "McLarty Maia - Jeep Pacaembu"
+        arquivo: "sp_mclarty_maia.xlsx"
+        filtro_cliente: "McLarty Maia - Jeep Pacaembu"
+        sheet: "Sheet0"
+        ativa: true
+
+  SP2:
+    nome_completo: "São Paulo - Região 2"
+    lojas:
+
+  PE:
+    nome_completo: "Pernambuco"
+    lojas:
+      # Adicionar lojas de PE aqui quando disponível
+      # - nome: "Loja PE 1"
+      #   arquivo: "pe_loja1.xlsx"
+      #   ...
+
+# ============================================================================
+# METADADOS
+# ============================================================================
+metadata:
+  versao: "1.0"
+  ultima_atualizacao: "2025-01-15"
+  responsavel: "Equipe PowerX"

@@ -5,6 +5,7 @@ Adaptado para trabalhar com dados transacionais do Excel.
 
 import streamlit as st
 import pandas as pd
+from config_loader import config
 
 from data_loader import (
     load_shop_config, 
@@ -19,6 +20,7 @@ from kpi_processor import (
     get_consultores_list,
     filter_metricas_por_consultor
 )
+
 from charts import (
     create_ranking_chart,
     create_produtos_chart,
@@ -26,6 +28,20 @@ from charts import (
     create_penetracao_chart,
     create_evolucao_temporal_chart
 )
+
+# ==============================================================================
+# 0. CONFIGURAÇÃO DA PÁGINA
+# ==============================================================================
+
+settings = config.get_settings()
+ui_config = settings.get('ui', {})
+
+st.set_page_config(
+    page_title=ui_config.get('titulo', 'Dashboard PowerX'),
+    page_icon=ui_config.get('icone_pagina', '📊'),
+    layout=ui_config.get('layout', 'wide')
+)
+
 # ==============================================================================
 # 1. SIDEBAR - FILTROS DE REGIÃO E LOJAS
 # ==============================================================================
@@ -35,6 +51,11 @@ st.sidebar.subheader('Seleção de Região e Lojas')
 
 # Carrega configuração de lojas
 shop_config_hierarchical = load_shop_config()
+
+if not shop_config_hierarchical:
+    st.error("Não foi possível carregar configuração de lojas.")
+    st.stop()
+
 regioes = list(shop_config_hierarchical.keys())
 
 # Filtro 1: Região
@@ -55,9 +76,9 @@ lojas_selecionadas = st.sidebar.multiselect(
 # Prepara configurações para carregar dados
 loja_configs = []
 for loja in lojas_selecionadas:
-    config = shop_config_hierarchical[regiao_selecionada][loja].copy()
-    config['name'] = loja
-    loja_configs.append(config)
+    loja_config = shop_config_hierarchical[regiao_selecionada][loja].copy()
+    loja_config['name'] = loja
+    loja_configs.append(loja_config)
     
     
 # ==============================================================================

@@ -1,0 +1,36 @@
+# ============================================================================
+# CONFIGURAÇÕES GERAIS - PowerX Dashboard
+# ============================================================================
+
+# Configurações de cache
+cache:
+  ttl_segundos: 300  # 5 minutos
+  max_entries: 100
+
+# Configurações visuais
+ui:
+  titulo: "Dashboard PowerX"
+  icone_pagina: "📊"
+  layout: "wide"
+  altura_graficos_padrao: 350
+  
+# Formato de dados
+formatos:
+  data_entrada: "%Y-%m-%d"  # ANO/MÊS/DIA
+  data_exibicao: "%b/%y"    # Abr/25
+  moeda: "BRL"
+  separador_milhares: "."
+  separador_decimal: ","
+
+# Validações
+validacoes:
+  tolerancia_valor_total: 0.10  # Centavos
+  quantidade_minima: 0
+  valor_minimo: 0
+
+#Periodos
+periodos:
+  # Se true, último mês é padrão; se false, todos os meses
+  usar_ultimo_mes_padrao: true
+  # Quantidade máxima de meses que podem ser selecionados
+  max_meses_selecionaveis: 12

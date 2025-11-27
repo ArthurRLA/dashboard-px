@@ -8,39 +8,49 @@ import pandas as pd
 import os
 from typing import Optional, Tuple, List
 from pathlib import Path
+from config_loader import config
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO DE LOJAS (Hierárquica)
 # ==============================================================================
 
 def load_shop_config():
-    BASE_DIR = '/home/arthur/projetos/database_px/dashboard-px/xlsx'
+   
+    # Carrega YAML
+    lojas_yaml = config.get_lojas_config()
     
-    # ✅ Um arquivo por loja (confirma que cada loja terá seu próprio XLSX)
-    return {
-        "SP1": {
-            "McLarty Maia": {
-                'path': os.path.join(BASE_DIR, 'relatorio-vendas.xlsx'),  # ✅ Nome confirmado
-                'filter': 'McLarty Maia - Mini Pinheiros',  # ✅ Texto exato da coluna Cliente
-                'sheet_name': 'Sheet0'  # ✅ Nome da sheet
-            },
-            "Jeep Pacaembu": {
-                'path': os.path.join(BASE_DIR, 'relatorio-vendas.xlsx'),
-                'filter': 'McLarty Maia - Jeep Pacaembu',  # Ajuste conforme o texto real
-                'sheet_name': 'Sheet0'
-            },
-        },
-        "SP2": {
-            "Mercedes Pacaembu": {
-                'path': os.path.join(BASE_DIR, 'relatorio-vendas.xlsx'),
-                'filter': 'McLarty Maia - Mercedes Pacaembu',  # Ajuste conforme o texto real
-                'sheet_name': 'Sheet0'
-            },
-        },
-        "PE": {
-            # Adicione lojas da região PE aqui quando disponível
-        }
-    }
+    if not lojas_yaml or 'regioes' not in lojas_yaml:
+        st.error("Erro ao carregar configuração de lojas (config/lojas.yaml)")
+        return {}
+    
+    # Obtém diretório de dados
+    data_dir = config.get_data_dir()
+    
+    # Transforma YAML em estrutura esperada pelo código
+    shop_config = {}
+    
+    for regiao_code, regiao_data in lojas_yaml['regioes'].items():
+        shop_config[regiao_code] = {}
+
+        lojas = regiao_data.get('lojas') or []  # ← FIX
+
+        for loja in lojas:
+            if not loja.get('ativa', True):
+                continue
+            
+            nome_loja = loja['nome']
+            shop_config[regiao_code][nome_loja] = {
+                'path': str(data_dir / loja['arquivo']),
+                'filter': loja.get('filtro_cliente', loja['nome_completo']),
+                'sheet_name': loja.get('sheet', 'Sheet0'),
+                'nome_completo': loja.get('nome_completo', nome_loja)
+            }
+    
+    if config.is_debug_mode():
+        st.sidebar.info(f"📁 Diretório de dados: {data_dir}")
+        st.sidebar.info(f"🏪 {sum(len(lojas) for lojas in shop_config.values())} lojas carregadas")
+    
+    return shop_config
 
 
 # ==============================================================================
@@ -48,20 +58,14 @@ def load_shop_config():
 # ==============================================================================
 
 def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str = 'Sheet0') -> Optional[pd.DataFrame]:
-    """
-    Lê arquivo XLSX e retorna DataFrame limpo com transações.
     
-    Args:
-        file_path: Caminho do arquivo .xlsx
-        loja_filter: Nome da loja para filtrar na coluna 'Cliente'
-        sheet_name: Nome da sheet (padrão: 'Sheet0')
-    
-    Returns:
-        DataFrame com colunas padronizadas ou None se erro
-    """
+    # Carrega settings
+    settings = config.get_settings()
+    validacoes = settings.get('validacoes', {})
+    formatos = settings.get('formatos', {})
     
     if not os.path.exists(file_path):
-        st.warning(f"⚠️ Arquivo não encontrado: {file_path}")
+        st.warning(f"Arquivo não encontrado: {file_path}")
         return None
     
     try:
@@ -69,7 +73,7 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
         df = pd.read_excel(
             file_path,
             sheet_name=sheet_name,
-            engine='openpyxl'  # Requer: pip install openpyxl
+            engine='openpyxl'
         )
 
         expected_columns = {
@@ -88,7 +92,7 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
         }
         
         # Renomeia colunas (case-insensitive)
-        df.columns = df.columns.str.strip()  # Remove espaços
+        df.columns = df.columns.str.strip()
         df.rename(columns=expected_columns, inplace=True)
         
         # Verifica colunas essenciais
@@ -109,7 +113,8 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
                 st.warning(f"⚠️ Nenhuma transação encontrada para loja: {loja_filter}")
                 return None
             
-            st.info(f"📊 Filtrado {len(df)} de {original_len} transações para {loja_filter}")
+            if config.is_debug_mode():
+                st.info(f"📊 Filtrado {len(df)} de {original_len} transações para {loja_filter}")
         
         # Limpeza e conversão de dados numéricos
         numeric_cols = ['Quantidade', 'Valor_Total', 'Valor_Unidade']
@@ -121,21 +126,24 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
                 df[col] = df[col].str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # Remove linhas inválidas (sem vendedor ou produto)
+        # Remove linhas inválidas
         df = df.dropna(subset=['Vendedor', 'Produto'])
         
-        # Valida cálculo: Valor_Total deve ser ≈ Valor_Unidade × Quantidade
+        # Valida cálculo (usa tolerância do settings)
+        tolerancia = validacoes.get('tolerancia_valor_total', 0.10)
+        
         if 'Valor_Unidade' in df.columns:
             df['Valor_Calculado'] = df['Valor_Unidade'] * df['Quantidade']
             df['Diferenca'] = abs(df['Valor_Total'] - df['Valor_Calculado'])
             
-            erros = df[df['Diferenca'] > 0.10]  # Tolerância de 10 centavos
+            erros = df[df['Diferenca'] > tolerancia]
             if len(erros) > 0:
-                st.warning(f"⚠️ {len(erros)} linhas com inconsistência de valores")
+                st.warning(f"⚠️ {len(erros)} linhas com inconsistência de valores (tolerância: R$ {tolerancia})")
         
-        # Extrai mês/período se disponível
+        # Extrai período (usa formato do settings)
         if 'Mes' in df.columns:
-            df = parse_periodos(df)
+            formato_data = formatos.get('data_entrada', '%Y/%m/%d')
+            df = parse_periodos(df, formato_data)
         
         # Adiciona coluna de identificação da loja
         if loja_filter:
@@ -145,8 +153,9 @@ def read_and_clean_xlsx(file_path: str, loja_filter: str = None, sheet_name: str
     
     except Exception as e:
         st.error(f"❌ Erro ao ler arquivo XLSX: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+        if config.is_debug_mode():
+            import traceback
+            st.code(traceback.format_exc())
         return None
 
 
@@ -266,25 +275,28 @@ def load_and_combine_data(loja_configs: list) -> Optional[pd.DataFrame]:
 # ==============================================================================
 # 5. FUNÇÕES DE FILTRO TEMPORAL
 # ==============================================================================
-
-def parse_periodos(df: pd.DataFrame) -> pd.DataFrame:
+def parse_periodos(df: pd.DataFrame, formato: str = '%Y/%m/%d') -> pd.DataFrame:
     """
     Parse da coluna Mes para datetime e extração de período.
     
     Args:
-        df: DataFrame com coluna 'Mes' no formato 'ANO/MÊS/DIA'
+        df: DataFrame com coluna 'Mes'
+        formato: Formato da data (ex: '%Y/%m/%d')
     
     Returns:
         DataFrame com colunas adicionais: Data, Periodo, Periodo_Display
     """
-    # Converte para datetime (formato ANO/MÊS/DIA)
-    df['Data'] = pd.to_datetime(df['Mes'], format='%Y-%m-%d', errors='coerce')
+    settings = config.get_settings()
+    formato_display = settings.get('formatos', {}).get('data_exibicao', '%b/%y')
     
-    # Cria coluna de período (ex: 2025-04)
+    # Converte para datetime
+    df['Data'] = pd.to_datetime(df['Mes'], format=formato, errors='coerce')
+    
+    # Cria coluna de período
     df['Periodo'] = df['Data'].dt.to_period('M')
     
-    # Formato para exibição (ex: Abr/25)
-    df['Periodo_Display'] = df['Data'].dt.strftime('%b/%y')
+    # Formato para exibição
+    df['Periodo_Display'] = df['Data'].dt.strftime(formato_display)
     
     return df
 
@@ -350,22 +362,8 @@ def calcular_metricas_temporais(df: pd.DataFrame) -> pd.DataFrame:
 # ==============================================================================
 
 @st.cache_data
+# Remove decorador fixo e adiciona dinâmico
 def load_data(loja_configs: list, periodos_selecionados: list = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str]]:
-    """
-    Função principal de carregamento e processamento.
-    
-    Args:
-        loja_configs: Lista de configurações de lojas
-        periodos_selecionados: Lista de períodos (Period objects) para filtrar
-    
-    Returns:
-        Tuple com:
-        - df_metricas_vendedor: Métricas agregadas por vendedor
-        - df_metricas_produto: Métricas agregadas por produto
-        - df_metricas_temporais: Métricas por período e loja
-        - lista_consultores: Lista de vendedores únicos
-    """
-    
     # 1. Carrega e combina dados
     df_master = load_and_combine_data(loja_configs)
     
@@ -381,15 +379,19 @@ def load_data(loja_configs: list, periodos_selecionados: list = None) -> Tuple[p
     df_metricas_produto = calcular_metricas_produto(df_master)
     df_metricas_temporais = calcular_metricas_temporais(df_master)
     
-    # 4. Extrai lista de consultores (vendedores únicos)
+    # 4. Extrai lista de consultores
     lista_consultores = sorted(df_master['Vendedor'].unique().tolist())
     
-    # Debug info (opcional)
-    with st.expander("🔍 Debug: Dados Carregados", expanded=False):
-        st.write(f"**Total de transações:** {len(df_master)}")
-        st.write(f"**Lojas:** {df_master['Nome_Loja'].unique().tolist()}")
-        st.write(f"**Vendedores:** {lista_consultores}")
-        st.write(f"**Períodos:** {df_master['Periodo_Display'].unique().tolist()}")
-        st.dataframe(df_master.head(10))
+    # Debug info
+    if config.is_debug_mode():
+        with st.expander("🔍 Debug: Dados Carregados", expanded=False):
+            st.write(f"**Total de transações:** {len(df_master)}")
+            st.write(f"**Lojas:** {df_master['Nome_Loja'].unique().tolist()}")
+            st.write(f"**Vendedores:** {lista_consultores}")
+            st.write(f"**Períodos:** {df_master['Periodo_Display'].unique().tolist()}")
+            st.dataframe(df_master.head(10))
     
     return df_metricas_vendedor, df_metricas_produto, df_metricas_temporais, lista_consultores
+
+# Aplica cache com TTL dinâmico
+load_data = st.cache_data(ttl=config.get_cache_ttl())(load_data)
