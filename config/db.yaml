@@ -1,0 +1,303 @@
+metadata:
+  version: "2.0.0-dynamic"
+  created_at: "2025-01-15"
+  database: "powerx_dashboard"
+  schema: "public"
+  hierarchy_source: "database_tables"  
+
+
+hierarchy:
+  source: "database_native"
+  
+  tables:
+    filial:
+      description: "Filiais regionais (Belo Horizonte, João Pessoa, São Paulo, Rio)"
+      pk: "id"
+      fields: ["id", "name"]
+      
+    state:
+      description: "Estados/regiões (SP1, SP2, PB, PE, etc)"
+      pk: "id"
+      fk_filial: "filial_id"
+      fields: ["id", "name", "filial_id"]
+      
+    groups:
+      description: "Grupos de concessionárias (39 grupos)"
+      pk: "id"
+      fields: ["id", "name"]
+      examples:
+        - "Beni Car"
+        - "Jorlan"
+        - "São Braz - Autobraz Fiat"
+        - "São Braz - GM"
+        - "São Braz - Brazauto Toyota"
+        - "Autoclub"
+      
+    flag:
+      description: "Marcas/bandeiras (37 marcas)"
+      pk: "id"
+      fields: ["id", "name"]
+      examples:
+        - "Honda"
+        - "Chevrolet"
+        - "Fiat"
+        - "Toyota"
+      
+    industry:
+      description: "Segmento de atuação"
+      pk: "id"
+      fields: ["id", "name"]
+      examples:
+        - "Concessionária de veículos"
+        - "Concessionária de motos"
+  
+  customer_relationships:
+    group_id: "groups.id"
+    flag_id: "flag.id"
+    industry_id: "industry.id"
+
+column_mapping:
+  N_Doc: "sale.document_number"
+  Mes: "sale.reference_date"
+  
+  Loja_ID: "customer.id"
+  Cliente: "customer.fantasy_name"
+  Nome_Loja: "customer.fantasy_name"
+  CNPJ: "customer.cnpj"
+  Endereco: "customer.address"
+
+  Grupo_ID: "customer.group_id"
+  Grupo: "groups.name"
+  
+  Marca_ID: "customer.flag_id"
+  Marca: "flag.name"
+  
+  Segmento_ID: "customer.industry_id"
+  Segmento: "industry.name"
+  
+  Estado: "INFERRED (address)"
+  Regiao_ID: "INFERRED → state.id"
+  Regiao: "INFERRED → state.name"
+  Filial_ID: "INFERRED → state.filial_id"
+  Filial: "INFERRED → filial.name"
+  
+  # Vendedor
+  Vendedor: "employee.name"
+  CPF: "employee.cpf"
+  Funcao: "sale.function"
+  
+  Produto: "product.product_code"
+  Descricao: "product.product_name"
+  
+  Quantidade: "sale.quantity"
+  
+  Valor_Unidade: "table_price.price"
+  Valor_Total: "CALCULATED (quantity * price)"
+
+queries:
+
+  sales_data: |
+    SELECT 
+      -- Identificação
+      s.id,
+      s.document_number as n_doc,
+      s.reference_date as mes,
+      s.quantity as quantidade,
+      s.function as funcao,
+      
+      -- Loja
+      c.id as loja_id,
+      c.fantasy_name as nome_loja,
+      c.cnpj,
+      c.address as endereco,
+      
+      -- Hierarquia DINÂMICA (via JOINs)
+      c.group_id,
+      g.name as grupo,
+      
+      c.flag_id,
+      f.name as marca,
+      
+      c.industry_id,
+      i.name as segmento,
+      
+      -- Estado/Região (INFERIDO via address - TEMPORÁRIO)
+      CASE
+        WHEN c.address ~* '(PB|João Pessoa|Campina Grande|Patos)' THEN 'PB'
+        WHEN c.address ~* '(PE|Recife)' THEN 'PE'
+        WHEN c.address ~* '(MG|Belo Horizonte)' THEN 'MG'
+        WHEN c.address ~* '(RJ|Rio de Janeiro)' THEN 'RJ'
+        WHEN c.address ~* '(SP|São Paulo)' THEN 'SP'
+        ELSE 'OUTRO'
+      END as estado_sigla,
+      
+      -- Mapear para state.id (TEMPORÁRIO - ajustar após descobrir FK real)
+      CASE
+        WHEN c.address ~* '(PB|João Pessoa|Campina Grande|Patos)' THEN 7
+        WHEN c.address ~* '(PE|Recife)' THEN 8
+        WHEN c.address ~* '(MG|Belo Horizonte)' THEN 4
+        WHEN c.address ~* '(RJ|Rio de Janeiro)' THEN 6
+        WHEN c.address ~* '(SP|São Paulo)' THEN 1
+        ELSE NULL
+      END as state_id_inferido,
+      
+      -- Vendedor
+      e.id as employee_id,
+      e.name as vendedor,
+      e.cpf,
+      
+      -- Produto
+      p.id as product_id,
+      p.product_code as produto,
+      p.product_name as descricao,
+      
+      -- Valores
+      COALESCE(tp.price, 0) as valor_unidade,
+      s.quantity * COALESCE(tp.price, 0) as valor_total,
+      
+      CASE 
+        WHEN tp.price IS NULL THEN 'SEM_PRECO'
+        ELSE 'OK'
+      END as status_preco
+      
+    FROM sale s
+    INNER JOIN customer c ON s.customer_id = c.id
+    INNER JOIN employee e ON s.employee_id = e.id
+    INNER JOIN product p ON s.product_id = p.id
+    
+    -- Hierarquia DINÂMICA
+    LEFT JOIN groups g ON c.group_id = g.id
+    LEFT JOIN flag f ON c.flag_id = f.id
+    LEFT JOIN industry i ON c.industry_id = i.id
+    
+    -- Preços
+    LEFT JOIN table_price tp ON p.id = tp.product_id AND c.id = tp.customer_id
+    
+    WHERE s.reference_date BETWEEN %(data_inicio)s AND %(data_fim)s
+      AND c.active = true
+      AND e.active = true
+    
+    ORDER BY s.reference_date DESC
+  
+  
+  list_lojas: |
+    SELECT 
+      c.id as loja_id,
+      c.fantasy_name as nome_loja,
+      c.registered_name,
+      c.cnpj,
+      c.address,
+      
+      -- Hierarquia dinâmica
+      c.group_id,
+      g.name as grupo,
+      
+      c.flag_id,
+      f.name as marca,
+      
+      c.industry_id,
+      i.name as segmento,
+      
+      -- Estado inferido
+      CASE
+        WHEN c.address ~* '(PB|João Pessoa|Campina Grande|Patos)' THEN 'PB'
+        WHEN c.address ~* '(PE|Recife)' THEN 'PE'
+        WHEN c.address ~* '(MG|Belo Horizonte)' THEN 'MG'
+        WHEN c.address ~* '(RJ|Rio de Janeiro)' THEN 'RJ'
+        WHEN c.address ~* '(SP|São Paulo)' THEN 'SP'
+        ELSE 'OUTRO'
+      END as estado,
+      
+      COUNT(s.id) as total_vendas
+      
+    FROM customer c
+    LEFT JOIN groups g ON c.group_id = g.id
+    LEFT JOIN flag f ON c.flag_id = f.id
+    LEFT JOIN industry i ON c.industry_id = i.id
+    LEFT JOIN sale s ON s.customer_id = c.id
+    
+    WHERE c.active = true
+    
+    GROUP BY c.id, c.fantasy_name, c.registered_name, c.cnpj, c.address,
+             c.group_id, g.name, c.flag_id, f.name, c.industry_id, i.name
+    
+    HAVING COUNT(s.id) > 0
+    
+    ORDER BY grupo, estado, nome_loja
+  
+
+  list_grupos: |
+    SELECT 
+      g.id,
+      g.name as grupo,
+      COUNT(DISTINCT c.id) as total_lojas,
+      COUNT(s.id) as total_vendas
+    FROM groups g
+    LEFT JOIN customer c ON c.group_id = g.id
+    LEFT JOIN sale s ON s.customer_id = c.id
+    WHERE c.active = true
+    GROUP BY g.id, g.name
+    HAVING COUNT(s.id) > 0
+    ORDER BY total_vendas DESC
+
+  
+  list_marcas: |
+    SELECT 
+      f.id,
+      f.name as marca,
+      COUNT(DISTINCT c.id) as total_lojas,
+      COUNT(s.id) as total_vendas
+    FROM flag f
+    LEFT JOIN customer c ON c.flag_id = f.id
+    LEFT JOIN sale s ON s.customer_id = c.id
+    WHERE c.active = true
+    GROUP BY f.id, f.name
+    HAVING COUNT(s.id) > 0
+    ORDER BY total_vendas DESC
+
+  
+  list_estados: |
+    SELECT 
+      s.id,
+      s.name as estado,
+      s.filial_id,
+      f.name as filial,
+      COUNT(DISTINCT c.id) as total_lojas
+    FROM state s
+    LEFT JOIN filial f ON s.filial_id = f.id
+    -- PENDENTE: JOIN com customer (descobrir vínculo)
+    GROUP BY s.id, s.name, s.filial_id, f.name
+    ORDER BY f.name, s.name
+
+# ============================================================================
+# INFERÊNCIA DE ESTADO (TEMPORÁRIO)
+# ============================================================================
+# Regex patterns para extrair estado do address
+# Será substituído quando descobrirmos FK real
+
+state_inference:
+  method: "regex_address"
+  patterns:
+    PB:
+      keywords: ["PB", "João Pessoa", "Campina Grande", "Patos", "Caicó"]
+      state_id: 7
+    PE:
+      keywords: ["PE", "Recife"]
+      state_id: 8
+    MG:
+      keywords: ["MG", "Belo Horizonte"]
+      state_id: 4
+    RJ:
+      keywords: ["RJ", "Rio de Janeiro"]
+      state_id: 6
+    SP:
+      keywords: ["SP", "São Paulo"]
+      state_id: 1
+  
+  fallback: "OUTRO"
+  
+  # TODO: Substituir por FK real quando descoberto
+  pending_investigation:
+    - "Descobrir vínculo customer → state"
+    - "Opções: via employee, via groups, ou criar customer.state_id"
+

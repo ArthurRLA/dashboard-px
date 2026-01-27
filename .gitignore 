@@ -1,27 +1,10 @@
-# Secrets (NUNCA commitar!)
+.venv/
+
+.env
+
+debug/
+
 .streamlit/secrets.toml
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-
-# Data files (opcional - depende se quer versionar)
-data/vendas/*.xlsx
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Streamlit cache
-.streamlit/cache/
+**/__pycache__/
+*.pyc

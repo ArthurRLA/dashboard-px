@@ -1,5 +1,10 @@
 streamlit
 pandas
 plotly
-openpyxl
 PyYAML
+psycopg2-binary
+sqlalchemy
+python-dotenv
+
+# A retirar futuramente
+openpyxl>=3.1.0
