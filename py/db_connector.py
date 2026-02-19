@@ -1,8 +1,3 @@
-"""
-Database Connector - PostgreSQL Connection Pool
-Gerencia conexões com o banco de dados usando pool de conexões.
-"""
-
 import streamlit as st
 import psycopg2
 from psycopg2 import pool
@@ -12,15 +7,6 @@ from typing import Optional, Dict, Any
 
 
 class DatabaseConnector:
-    """
-    Singleton para gerenciar pool de conexões PostgreSQL.
-    
-    Uso:
-        from db_connector import db
-        
-        df = db.execute_query("SELECT * FROM sale WHERE id = %(id)s", {'id': 1})
-    """
-    
     _instance = None
     _connection_pool = None
     
@@ -35,9 +21,7 @@ class DatabaseConnector:
             self._init_pool()
     
     def _init_pool(self):
-        """Inicializa o pool de conexões usando secrets do Streamlit."""
         try:
-            # Carrega configurações do secrets
             db_config = st.secrets.get('database', {})
             
             if not db_config:
@@ -46,11 +30,9 @@ class DatabaseConnector:
                     "Adicione seção [database] com host, port, database, user, password."
                 )
             
-            # Configurações do pool
             min_conn = db_config.get('connection_pool_min', 2)
             max_conn = db_config.get('connection_pool_max', 10)
             
-            # Cria pool de conexões
             self._connection_pool = psycopg2.pool.SimpleConnectionPool(
                 minconn=min_conn,
                 maxconn=max_conn,
@@ -85,14 +67,6 @@ class DatabaseConnector:
     
     @contextmanager
     def get_connection(self):
-        """
-        Context manager para obter conexão do pool.
-        
-        Uso:
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT 1")
-        """
         conn = None
         try:
             conn = self._connection_pool.getconn()
@@ -140,12 +114,6 @@ class DatabaseConnector:
             raise
     
     def test_connection(self) -> bool:
-        """
-        Testa conectividade com o banco.
-        
-        Returns:
-            True se conexão OK, False caso contrário
-        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -159,7 +127,6 @@ class DatabaseConnector:
             return False
     
     def close(self):
-        """Fecha todas as conexões do pool."""
         if self._connection_pool:
             self._connection_pool.closeall()
             if st.secrets.get('settings', {}).get('debug_mode', False):

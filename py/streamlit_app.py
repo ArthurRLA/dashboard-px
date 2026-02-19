@@ -14,7 +14,8 @@ from kpi_processor import (
     create_kpi_dataframe_map,
     calculate_kpis_chave,
     get_consultores_list,
-    filter_metricas_por_consultor
+    filter_metricas_por_consultor,
+    calculate_sell_in_by_consultor 
 )
 
 from charts import (
@@ -22,7 +23,8 @@ from charts import (
     create_produtos_chart,
     create_performance_chart,
     create_penetracao_chart,
-    create_evolucao_temporal_chart
+    create_evolucao_temporal_chart,
+    create_sell_in_chart 
 )
 
 settings = config.get_settings()
@@ -36,17 +38,16 @@ st.set_page_config(
 
 if not db.test_connection():
     st.error("Não foi possível conectar ao PostgreSQL")
-    st.info(
-        "**Verifique:**\n"
-        "- Credenciais em `.streamlit/secrets.toml`\n"
-        "- PostgreSQL está rodando\n"
-        "- Firewall permite conexão\n"
-        "- IP/Porta corretos"
-    )
     st.stop()
 
 
 st.sidebar.header('Dashboard POWERX')
+
+st.sidebar.markdown('---')
+if st.sidebar.button('💰 Ir para Análise de Incentivos', use_container_width=True):
+    st.switch_page("pages/Incentivos.py")
+st.sidebar.markdown('---')
+
 st.sidebar.subheader('Seleção de Grupo e Lojas')
 
 shop_config = load_shop_config_from_db()
@@ -94,8 +95,19 @@ hoje = datetime.now().date()
 primeiro_dia_mes_atual = hoje.replace(day=1)
 ultimo_dia_mes_anterior = primeiro_dia_mes_atual - timedelta(days=1)
 primeiro_dia_mes_anterior = ultimo_dia_mes_anterior.replace(day=1)
+
 data_fim_default = min(ultimo_dia_mes_anterior, data_max)
 data_inicio_default = max(primeiro_dia_mes_anterior, data_min)
+
+if data_fim_default < data_min or data_fim_default > data_max:
+    data_fim_default = data_max
+    
+if data_inicio_default < data_min or data_inicio_default > data_max:
+    data_inicio_default = data_min
+    
+if data_inicio_default > data_fim_default:
+    data_inicio_default = data_min
+    data_fim_default = data_max
 
 col1, col2 = st.sidebar.columns(2)
 
@@ -140,7 +152,7 @@ if df_metricas_vendedor.empty:
         f"**Sem dados** para **{titulo_lojas}** no período "
         f"**{data_inicio.strftime('%d/%m/%Y')}** até **{data_fim.strftime('%d/%m/%Y')}**"
     )
-    st.info("Procure uma nova data ou nova loja ou sei lá")
+    st.info("Procure uma nova data ou nova loja")
     st.stop()
 
 KPI_DATAFRAME_MAP = create_kpi_dataframe_map(df_metricas_vendedor)
@@ -149,6 +161,8 @@ df_venda_rs = KPI_DATAFRAME_MAP['TOTAL VENDA RS']['df']
 df_performance = KPI_DATAFRAME_MAP['PERFORMANCE']['df']
 df_ticket_medio = KPI_DATAFRAME_MAP['TKT MÉDIO SELL OUT']['df']
 df_produtos_consultor = KPI_DATAFRAME_MAP['TOTAL DE PRODUTOS']['df']
+
+df_sell_in = calculate_sell_in_by_consultor(df_metricas_vendedor)
 
 kpis_chave = calculate_kpis_chave(df_metricas_vendedor)
 
@@ -203,6 +217,8 @@ col4.metric("Total de Produtos", f"{int(total_produtos):,} un.")
 
 st.markdown('---')
 
+
+
 st.subheader(f'Ranking de Vendas: {kpi_selecionado} por Consultor')
 
 selected_kpi_info = KPI_DATAFRAME_MAP[kpi_selecionado]
@@ -225,38 +241,33 @@ else:
 st.markdown('---')
 
 
-if kpi_selecionado != 'TOTAL DE PRODUTOS':
-    st.subheader('Total de Produtos/Consultor')
-    
-    df_produtos_filtered = df_produtos_consultor[
-        df_produtos_consultor['Consultor'].isin(consultor_selecionado)
-    ]
-    
-    if not df_produtos_filtered.empty:
-        fig_produtos = create_produtos_chart(df_produtos_filtered, consultor_selecionado)
-        st.plotly_chart(fig_produtos, use_container_width=True)
+
+
+st.subheader('Sell In por Consultor')
+
+col_sell_in, col_info_sell_in = st.columns([2, 1])
+
+with col_sell_in:
+    if not df_sell_in.empty:
+        fig_sell_in = create_sell_in_chart(df_sell_in, consultor_selecionado, plot_height)
+        st.plotly_chart(fig_sell_in, use_container_width=True)
     else:
-        st.info("Sem dados de produtos para os consultores selecionados")
+        st.info("Sem dados de Sell In disponíveis")
+
+with col_info_sell_in:
+    st.markdown("##### O que é Sell In?")
     
-    st.markdown('---')
-
-
-st.subheader('Performance: Produtos/Passagem')
-
-df_performance_filtered = df_performance[
-    df_performance['Consultor'].isin(consultor_selecionado)
-]
-
-if not df_performance_filtered.empty:
-    fig_performance = create_performance_chart(df_performance_filtered, consultor_selecionado)
-    st.plotly_chart(fig_performance, use_container_width=True)
-else:
-    st.info("Sem dados de performance para os consultores selecionados")
+    if not df_sell_in.empty and not consultor_selecionado:
+        lider = df_sell_in.iloc[0]
+        st.metric(
+            "Maior Sell In",
+            lider['Consultor'],
+            f"{lider['Sell_In_Percentual']:.1f}%"
+        )
 
 st.markdown('---')
 
-
-st.subheader('Penetração Produto/OS (Share de Produtos Vendidos)')
+st.subheader('Penetração Produto/OS')
 
 col_penetracao, col_info = st.columns([2, 1])
 
@@ -274,7 +285,7 @@ with col_info:
     
     st.info(
         "Este gráfico exibe a distribuição de produtos vendidos. "
-        "Os dados são agregados de todas as lojas selecionadas."
+        "Os dados são agregados a partir de todas as lojas selecionadas."
     )
     
     if not df_metricas_produto.empty:
@@ -287,8 +298,42 @@ with col_info:
             f"{produto_lider['Penetracao_Produto']:.2f}%"
         )
 
+st.markdown('---')
+
+
+#--------------------------------------
+# DEMAIS GRÁFICOS (mantidos no final)
+
+# Total de Produtos/Consultor (condicional)
+if kpi_selecionado != 'TOTAL DE PRODUTOS':
+    st.subheader('Total de Produtos/Consultor')
+    
+    df_produtos_filtered = df_produtos_consultor[
+        df_produtos_consultor['Consultor'].isin(consultor_selecionado)
+    ]
+    
+    if not df_produtos_filtered.empty:
+        fig_produtos = create_produtos_chart(df_produtos_filtered, consultor_selecionado)
+        st.plotly_chart(fig_produtos, use_container_width=True)
+    else:
+        st.info("Sem dados de produtos para os consultores selecionados")
+    
+    st.markdown('---')
+
+st.subheader('Performance: Produtos/Passagem')
+
+df_performance_filtered = df_performance[
+    df_performance['Consultor'].isin(consultor_selecionado)
+]
+
+if not df_performance_filtered.empty:
+    fig_performance = create_performance_chart(df_performance_filtered, consultor_selecionado)
+    st.plotly_chart(fig_performance, use_container_width=True)
+else:
+    st.info("Sem dados para conseguir a performace")
 
 st.markdown('---')
+
 st.subheader('Evolução Temporal por Loja')
 
 if not df_metricas_temporais.empty:
@@ -313,14 +358,19 @@ if not df_metricas_temporais.empty:
             format_brl(faturamento_top)
         )
 else:
-    st.info("Sem dados temporais para o período selecionado")
+    st.info("Sem dados")
 
 st.markdown('---')
 
+
+# ------------------DEBUG------------------------
 if st.secrets.get('settings', {}).get('debug_mode', False):
     with st.expander("🔍 Debug: Métricas Detalhadas", expanded=False):
         st.write("### Métricas por Vendedor")
         st.dataframe(df_metricas_vendedor)
+        
+        st.write("### Sell In por Consultor")
+        st.dataframe(df_sell_in)
         
         st.write("### Top 10 Produtos")
         st.dataframe(df_metricas_produto.head(10))

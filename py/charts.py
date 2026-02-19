@@ -157,3 +157,215 @@ def create_evolucao_temporal_chart(df_temporal: pd.DataFrame) -> go.Figure:
         template='plotly_white'
     )
     return fig
+
+def create_incentive_pie_chart(df_employee: pd.DataFrame) -> go.Figure:
+    if df_employee.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Nenhum dado disponível",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        return fig
+    
+    df_top = df_employee.nlargest(10, 'valor_total_incentivos')
+    
+    fig = px.pie(
+        df_top,
+        names='vendedor',
+        values='valor_total_incentivos',
+        title='Distribuição de Incentivos por Vendedor (Top 10)',
+        hole=0.3,
+        height=450
+    )
+    
+    fig.update_traces(
+        textposition='inside',
+        textinfo='percent+label',
+        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>'
+    )
+    
+    return fig
+
+
+def create_incentive_bar_chart(df_employee: pd.DataFrame, top_n: int = 15, plot_height: int = 500) -> go.Figure:
+    if df_employee.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Nenhum dado disponível",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        return fig
+    
+    df_top = df_employee.nlargest(top_n, 'valor_total_incentivos')
+    
+    fig = px.bar(
+        df_top,
+        x='vendedor',
+        y='valor_total_incentivos',
+        title=f'Top {top_n} Vendedores - Incentivos Recebidos',
+        color='funcao',
+        text='valor_total_incentivos',
+        height=plot_height
+    )
+    
+    fig.update_traces(
+        texttemplate='R$ %{y:,.2f}',
+        textposition='outside'
+    )
+    
+    fig.update_layout(
+        xaxis_title="Vendedor",
+        yaxis_title="Valor Total (R$)",
+        xaxis_tickangle=-45,
+        showlegend=True
+    )
+    
+    return fig
+
+
+def create_monthly_comparison_bar_chart(df_monthly: pd.DataFrame) -> go.Figure:
+    if df_monthly.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Nenhum dado disponível",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        return fig
+    
+    top_vendedores = (
+        df_monthly.groupby('vendedor')['valor_mes']
+        .sum()
+        .nlargest(10)
+        .index.tolist()
+    )
+    
+    df_filtered = df_monthly[df_monthly['vendedor'].isin(top_vendedores)]
+    
+    fig = px.bar(
+        df_filtered,
+        x='mes_display',
+        y='valor_mes',
+        color='vendedor',
+        title='Evolução Mensal de Incentivos (Top 10 Vendedores)',
+        barmode='group',
+        height=500
+    )
+    
+    fig.update_layout(
+        xaxis_title="Período",
+        yaxis_title="Valor (R$)",
+        xaxis_tickangle=-45,
+        legend_title="Vendedor",
+        hovermode='x unified'
+    )
+    
+    fig.update_traces(
+        hovertemplate='<b>%{fullData.name}</b><br>Valor: R$ %{y:,.2f}<extra></extra>'
+    )
+    
+    return fig
+
+
+def create_monthly_stores_comparison_chart(df_monthly: pd.DataFrame, df_employee: pd.DataFrame) -> go.Figure:
+    if df_monthly.empty or df_employee.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Nenhum dado disponível",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        return fig
+    
+    df_with_loja = df_monthly.merge(
+        df_employee[['vendedor', 'loja']],
+        on='vendedor',
+        how='left'
+    )
+    
+    df_lojas_mes = df_with_loja.groupby(['loja', 'mes_display', 'mes']).agg({
+        'valor_mes': 'sum',
+        'quantidade_mes': 'sum'
+    }).reset_index()
+    
+    df_lojas_mes = df_lojas_mes.sort_values('mes')
+    
+    fig = px.bar(
+        df_lojas_mes,
+        x='mes_display',
+        y='valor_mes',
+        color='loja',
+        title='Comparação de Incentivos por Loja - Evolução Mensal',
+        barmode='group',
+        height=500,
+        text='valor_mes'
+    )
+    
+    fig.update_traces(
+        texttemplate='R$ %{text:,.0f}',
+        textposition='outside',
+        hovertemplate='<b>%{fullData.name}</b><br>Período: %{x}<br>Valor: R$ %{y:,.2f}<extra></extra>'
+    )
+    
+    fig.update_layout(
+        xaxis_title="Período",
+        yaxis_title="Valor Total de Incentivos (R$)",
+        xaxis_tickangle=-45,
+        legend_title="Loja",
+        hovermode='x unified',
+        showlegend=True
+    )
+    
+    return fig
+
+
+def format_incentive_monthly_table(df_pivot: pd.DataFrame) -> pd.DataFrame:
+    if df_pivot.empty:
+        return pd.DataFrame()
+    
+    df_display = df_pivot.copy()
+    
+    for col in df_display.columns:
+        if col != 'vendedor' and col != 'Vendedor':
+            df_display[col] = df_display[col].apply(
+                lambda x: f"R$ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notna(x) else "R$ 0,00"
+            )
+    
+    return df_display
+
+
+def create_sell_in_chart(df_sell_in: pd.DataFrame, consultor_selecionado: list, plot_height: int = 400) -> go.Figure:
+    if df_sell_in.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="Nenhum dado disponível",)
+        return fig
+    
+    df_filtered = df_sell_in[df_sell_in['Consultor'].isin(consultor_selecionado)]
+    
+    if df_filtered.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="Nenhum consultor selecionado",)
+        return fig
+    
+    fig = px.bar(
+        df_filtered,
+        x='Consultor',
+        y='Sell_In_Percentual',
+        title='Sell In por Consultor',
+        text='Sell_In_Percentual',
+        color='Sell_In_Percentual',
+        color_continuous_scale='Blues',
+        height=plot_height
+    )
+    
+    fig.update_traces(texttemplate='%{y:.1f}%', textposition='outside')
+    fig.update_layout(xaxis_title="Consultor", yaxis_title="Sell In (%)",)
+    fig.update_coloraxes(showscale=False)
+    
+    return fig

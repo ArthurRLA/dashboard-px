@@ -195,3 +195,123 @@ class MetadataQueries:
           MAX(reference_date) as data_fim
         FROM sale
         """
+
+class IncentiveQueries:
+    
+    @staticmethod
+    def get_incentives_by_employee() -> str:
+        return """
+        SELECT 
+            e.id as employee_id,
+            i.cpf,
+            e.name as vendedor,
+            f.name as funcao,
+            
+            -- Loja
+            c.fantasy_name as loja,
+            g.name as grupo,
+            
+            -- Agregações
+            COUNT(i.id) as total_incentivos,
+            COALESCE(SUM(i.incentive_value), 0) as valor_total_incentivos,
+            COALESCE(AVG(i.incentive_value), 0) as valor_medio_incentivo
+            
+        FROM incentive i
+        INNER JOIN employee e ON i.employee_id = e.id
+        INNER JOIN customer c ON i.customer_id = c.id
+        LEFT JOIN groups g ON c.group_id = g.id
+        LEFT JOIN function f ON i.function_id = f.id
+        
+        WHERE c.id = ANY(%(lojas_ids)s)
+          AND e.active = true
+          AND c.active = true
+          AND TO_CHAR(i.reference_date, 'YYYY-MM') = ANY(%(meses)s)
+        
+        GROUP BY e.id, i.cpf, e.name, f.name, c.fantasy_name, g.name
+        ORDER BY valor_total_incentivos DESC
+        """
+    
+    @staticmethod
+    def get_incentives_by_month_employee() -> str:
+        return """
+        SELECT 
+            e.id as employee_id,
+            e.name as vendedor,
+            i.cpf,
+            
+            -- Período
+            TO_CHAR(i.reference_date, 'YYYY-MM') as mes,
+            TO_CHAR(i.reference_date, 'Mon/YY') as mes_display,
+            
+            -- Valores do mês
+            COUNT(i.id) as quantidade_mes,
+            COALESCE(SUM(i.incentive_value), 0) as valor_mes
+            
+        FROM incentive i
+        INNER JOIN employee e ON i.employee_id = e.id
+        INNER JOIN customer c ON i.customer_id = c.id
+        
+        WHERE c.id = ANY(%(lojas_ids)s)
+          AND e.active = true
+          AND c.active = true
+          AND TO_CHAR(i.reference_date, 'YYYY-MM') = ANY(%(meses)s)
+        
+        GROUP BY e.id, e.name, i.cpf, mes, mes_display
+        ORDER BY e.name, mes 
+        """
+    
+    @staticmethod
+    def get_available_months() -> str:
+        return """
+        SELECT DISTINCT
+            TO_CHAR(reference_date, 'YYYY-MM') as mes,
+            TO_CHAR(reference_date, 'Mon/YYYY') as mes_display,
+            COUNT(*) as total_incentivos
+        FROM incentive
+        WHERE reference_date IS NOT NULL
+        GROUP BY mes, mes_display
+        ORDER BY mes DESC
+        """
+    
+    @staticmethod
+    def get_incentives_details() -> str:
+        return """
+        SELECT 
+            i.id,
+            i.cpf,
+            i.incentive_value as valor,
+            i.reference_date as data_referencia,
+            i.sale_document_number as numero_documento,
+            i.state,
+            
+            -- Vendedor
+            e.id as employee_id,
+            e.name as vendedor,
+            
+            -- Loja
+            c.id as customer_id,
+            c.fantasy_name as loja,
+            
+            -- Hierarquia
+            g.name as grupo,
+            
+            -- Função
+            f.name as funcao,
+            
+            -- Período formatado
+            TO_CHAR(i.reference_date, 'YYYY-MM') as mes,
+            TO_CHAR(i.reference_date, 'Mon/YY') as mes_display
+            
+        FROM incentive i
+        INNER JOIN employee e ON i.employee_id = e.id
+        INNER JOIN customer c ON i.customer_id = c.id
+        LEFT JOIN groups g ON c.group_id = g.id
+        LEFT JOIN function f ON i.function_id = f.id
+        
+        WHERE c.id = ANY(%(lojas_ids)s)
+          AND e.active = true
+          AND c.active = true
+          AND TO_CHAR(i.reference_date, 'YYYY-MM') = ANY(%(meses)s)
+        
+        ORDER BY i.reference_date DESC, e.name
+        """

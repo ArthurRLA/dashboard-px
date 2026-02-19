@@ -1,8 +1,3 @@
-"""
-Carregador de Configurações
-Gerencia secrets, configurações YAML e paths
-"""
-
 import os
 import yaml
 import streamlit as st
@@ -92,7 +87,7 @@ class ConfigLoader:
         
         # Carrega
         if not full_path.exists():
-            st.error(f"❌ Arquivo de configuração não encontrado: {full_path}")
+            st.error(f"Arquivo de configuração não encontrado: {full_path}")
             return {}
         
         with open(full_path, 'r', encoding='utf-8') as f:

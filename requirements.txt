@@ -1,4 +1,5 @@
 streamlit
+streamlit-authenticator
 pandas
 plotly
 PyYAML
@@ -6,5 +7,8 @@ psycopg2-binary
 sqlalchemy
 python-dotenv
 
-# A retirar futuramente
-openpyxl>=3.1.0
+bcrypt
+PyJWT
+extra-streamlit-components
+
+openpyxl

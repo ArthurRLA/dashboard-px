@@ -181,7 +181,7 @@ class DataTransformer:
             )
         
         if sem_preco == 0 and qtd_invalida == 0:
-            st.success(f"{total:,} registros carregados sem problemas!")
+            st.success(f"{total:,} dados carregados")
 
 
 class GroupHierarchyBuilder:

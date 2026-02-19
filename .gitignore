@@ -1,10 +1,10 @@
+.streamlit/secrets.toml
+
 .venv/
 
 .env
 
 debug/
-
-.streamlit/secrets.toml
 
 **/__pycache__/
 *.pyc
