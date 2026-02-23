@@ -17,7 +17,7 @@ def create_ranking_chart(df_ranking_filtered: pd.DataFrame, kpi_selecionado: str
         df_ranking_filtered.sort_values(by=value_col_name, ascending=False),
         x='Consultor',
         y=value_col_name,
-        title=f'Ranking Regional por {kpi_selecionado}',
+        title=f'{kpi_selecionado}',
         color='Consultor',
         text=value_col_name,
         height=plot_height

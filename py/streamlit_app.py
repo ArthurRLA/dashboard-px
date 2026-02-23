@@ -21,7 +21,6 @@ from kpi_processor import (
 from charts import (
     create_ranking_chart,
     create_produtos_chart,
-    create_performance_chart,
     create_penetracao_chart,
     create_evolucao_temporal_chart,
     create_sell_in_chart 
@@ -157,9 +156,8 @@ if df_metricas_vendedor.empty:
 
 KPI_DATAFRAME_MAP = create_kpi_dataframe_map(df_metricas_vendedor)
 
-df_venda_rs = KPI_DATAFRAME_MAP['TOTAL VENDA RS']['df']
-df_performance = KPI_DATAFRAME_MAP['PERFORMANCE']['df']
-df_ticket_medio = KPI_DATAFRAME_MAP['TKT MÉDIO SELL OUT']['df']
+df_sell_in_consultor  = KPI_DATAFRAME_MAP['SELL IN']['df']
+df_ticket_medio       = KPI_DATAFRAME_MAP['TKT MÉDIO SELL OUT']['df']
 df_produtos_consultor = KPI_DATAFRAME_MAP['TOTAL DE PRODUTOS']['df']
 
 df_sell_in = calculate_sell_in_by_consultor(df_metricas_vendedor)
@@ -182,7 +180,7 @@ st.sidebar.subheader('Métrica de Ranking')
 kpi_selecionado = st.sidebar.selectbox(
     'Visualizar Ranking por:',
     options=list(KPI_DATAFRAME_MAP.keys()),
-    index=1
+    index=0 
 )
 
 plot_height = st.sidebar.slider(
@@ -200,26 +198,24 @@ st.caption(
 
 st.markdown('---')
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
-venda_total = kpis_chave.get('Venda Total (R$)', 0)
-performance_media = kpis_chave.get('Performance Média', 0)
-ticket_medio = kpis_chave.get('Ticket Médio (R$)', 0)
+sell_in_total  = kpis_chave.get('Sell In Total (R$)', 0)
+ticket_medio   = kpis_chave.get('Ticket Médio (R$)', 0)
 total_produtos = kpis_chave.get('Total de Produtos', 0)
 
 def format_brl(valor):
     return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
-col1.metric("Venda Total (R$)", format_brl(venda_total))
-col2.metric("Performance Média", f"{performance_media:.2f} p/p")
-col3.metric("Ticket Médio (R$)", format_brl(ticket_medio))
-col4.metric("Total de Produtos", f"{int(total_produtos):,} un.")
+col1.metric("Sell In Total (R$)", format_brl(sell_in_total))
+col2.metric("Ticket Médio (R$)", format_brl(ticket_medio))
+col3.metric("Total de Produtos", f"{int(total_produtos):,} un.")
 
 st.markdown('---')
 
 
 
-st.subheader(f'Ranking de Vendas: {kpi_selecionado} por Consultor')
+st.subheader(f'Ranking: {kpi_selecionado} por Consultor')
 
 selected_kpi_info = KPI_DATAFRAME_MAP[kpi_selecionado]
 df_current_kpi = selected_kpi_info['df']
@@ -242,7 +238,6 @@ st.markdown('---')
 
 
 
-
 st.subheader('Sell In por Consultor')
 
 col_sell_in, col_info_sell_in = st.columns([2, 1])
@@ -255,10 +250,15 @@ with col_sell_in:
         st.info("Sem dados de Sell In disponíveis")
 
 with col_info_sell_in:
-    st.markdown("##### O que é Sell In?")
+    st.markdown("##### Participação no Sell In Total")
+    st.info(
+        "Percentual de cada consultor no total de produtos vendidos "
+        "para as lojas selecionadas no período."
+    )
     
-    if not df_sell_in.empty and not consultor_selecionado:
-        lider = df_sell_in.iloc[0]
+    df_sell_in_filtrado = df_sell_in[df_sell_in['Consultor'].isin(consultor_selecionado)]
+    if not df_sell_in_filtrado.empty:
+        lider = df_sell_in_filtrado.iloc[0]
         st.metric(
             "Maior Sell In",
             lider['Consultor'],
@@ -284,8 +284,7 @@ with col_info:
     st.markdown("##### Informações de Penetração")
     
     st.info(
-        "Este gráfico exibe a distribuição de produtos vendidos. "
-        "Os dados são agregados a partir de todas as lojas selecionadas."
+        "Distribuição de produtos vendidos agregada por todas as lojas selecionadas."
     )
     
     if not df_metricas_produto.empty:
@@ -301,10 +300,7 @@ with col_info:
 st.markdown('---')
 
 
-#--------------------------------------
-# DEMAIS GRÁFICOS (mantidos no final)
 
-# Total de Produtos/Consultor (condicional)
 if kpi_selecionado != 'TOTAL DE PRODUTOS':
     st.subheader('Total de Produtos/Consultor')
     
@@ -320,19 +316,6 @@ if kpi_selecionado != 'TOTAL DE PRODUTOS':
     
     st.markdown('---')
 
-st.subheader('Performance: Produtos/Passagem')
-
-df_performance_filtered = df_performance[
-    df_performance['Consultor'].isin(consultor_selecionado)
-]
-
-if not df_performance_filtered.empty:
-    fig_performance = create_performance_chart(df_performance_filtered, consultor_selecionado)
-    st.plotly_chart(fig_performance, use_container_width=True)
-else:
-    st.info("Sem dados para conseguir a performace")
-
-st.markdown('---')
 
 st.subheader('Evolução Temporal por Loja')
 
@@ -345,7 +328,7 @@ if not df_metricas_temporais.empty:
     with col_info1:
         st.info(
             "**Linhas Sólidas**: Total de Produtos (eixo esquerdo)\n\n"
-            "**Linhas Tracejadas**: Faturamento em R$ (eixo direito)"
+            "**Linhas Tracejadas**: Sell In em R$ (eixo direito)"
         )
     
     with col_info2:
@@ -353,7 +336,7 @@ if not df_metricas_temporais.empty:
         faturamento_top = df_metricas_temporais.groupby('Nome_Loja')['Venda_RS'].sum().max()
         
         st.metric(
-            "Loja Destaque (Faturamento)",
+            "Loja Destaque (Sell In)",
             loja_top,
             format_brl(faturamento_top)
         )

@@ -1,8 +1,3 @@
-"""
-Data Loader - PostgreSQL Version
-Carrega dados do banco PostgreSQL e calcula métricas.
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -18,17 +13,6 @@ from db_query import IncentiveQueries
 
 @st.cache_data(ttl=300)
 def load_shop_config_from_db() -> dict:
-    """
-    Returns:
-        Dicionário no formato:
-        {
-            'Beni Car': {
-                'Beni Car - Castelo': {'id': 1, 'cnpj': '...'},
-                'Beni Car - São José': {'id': 7, 'cnpj': '...'}
-            },
-            'Jorlan': { ... }
-        }
-    """
     try:
         query_grupos = MetadataQueries.get_grupos()
         df_grupos = db.execute_query(query_grupos)
@@ -101,20 +85,10 @@ def load_sales_from_db(
 
 
 def calcular_metricas_vendedor(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Returns:
-        DataFrame com:
-        - Consultor (ou Vendedor)
-        - Total_Produtos
-        - Venda_RS
-        - Total_OS
-        - Ticket_Medio
-        - Performance
-    """
     if df.empty:
         return pd.DataFrame(columns=[
             'Consultor', 'Total_Produtos', 'Venda_RS',
-            'Total_OS', 'Ticket_Medio', 'Performance'
+            'Total_OS', 'Ticket_Medio'
         ])
     
     metricas = df.groupby('Vendedor').agg({
@@ -125,13 +99,9 @@ def calcular_metricas_vendedor(df: pd.DataFrame) -> pd.DataFrame:
     
     metricas.columns = ['Vendedor', 'Total_Produtos', 'Venda_RS', 'Total_OS']
     
-    metricas['Ticket_Medio'] = metricas['Venda_RS'] / metricas['Total_OS']
-    metricas['Performance'] = metricas['Total_Produtos'] / metricas['Total_OS']
+    metricas['Ticket_Medio'] = metricas['Venda_RS'] / metricas['Total_Produtos']
     
     metricas['Ticket_Medio'] = metricas['Ticket_Medio'].replace(
-        [float('inf'), float('-inf')], 0
-    ).fillna(0)
-    metricas['Performance'] = metricas['Performance'].replace(
         [float('inf'), float('-inf')], 0
     ).fillna(0)
     
@@ -141,15 +111,6 @@ def calcular_metricas_vendedor(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calcular_metricas_produto(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Returns:
-        DataFrame com:
-        - Produto (código)
-        - Descricao
-        - Quantidade_Total
-        - Valor_Total
-        - Penetracao_Produto (%)
-    """
     if df.empty:
         return pd.DataFrame(columns=[
             'Produto', 'Descricao', 'Quantidade_Total',
@@ -176,15 +137,6 @@ def calcular_metricas_produto(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calcular_metricas_temporais(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Returns:
-        DataFrame com:
-        - Periodo
-        - Nome_Loja
-        - Total_Produtos
-        - Venda_RS
-        - Periodo_Str (para gráficos)
-    """
     if df.empty:
         return pd.DataFrame(columns=[
             'Periodo', 'Nome_Loja', 'Total_Produtos', 'Venda_RS', 'Periodo_Str'
@@ -257,10 +209,6 @@ def load_data(
 
 @st.cache_data(ttl=300)
 def get_date_range_from_db() -> Tuple[date, date]:
-    """
-    Returns:
-        Tupla (data_inicio, data_fim)
-    """
     try:
         query = MetadataQueries.get_date_range()
         df = db.execute_query(query)
