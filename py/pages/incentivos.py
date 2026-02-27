@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from auth import require_auth, get_current_user, logout, is_admin, get_user_id_filter
 
 from config_loader import config
 from db_connector import db
@@ -19,13 +20,14 @@ from charts import (
     format_incentive_monthly_table
 )
 
-settings = config.get_settings()
+# --------------AUTENTICAÇÃO--------------------- 
+require_auth()
+user           = get_current_user()
+user_id_filter = get_user_id_filter()
+
+settings  = config.get_settings()
 ui_config = settings.get('ui', {})
 
-st.set_page_config(
-    page_title="Incentivos - PowerX",
-    layout=ui_config.get('layout', 'wide')
-)
 
 def format_brl(valor):
     if pd.isna(valor) or valor == 0:
@@ -62,15 +64,26 @@ if not db.test_connection():
 col_nav1, col_nav2 = st.columns([1, 6])
 with col_nav1:
     if st.button("← Voltar para Vendas", use_container_width=True):
-        st.switch_page("streamlit_app.py")
+        st.switch_page("pages/vendas.py")
 
 st.title('Análise de Incentivos - Dashboard PowerX')
 st.markdown('---')
 
-
 st.sidebar.header('Filtros de Incentivos')
+st.sidebar.caption(f"👤 {user['name']}")
+if is_admin():
+    st.sidebar.caption("Administração")
+else:
+    st.sidebar.caption("Representante Comercial")
 
-shop_config = load_shop_config_from_db()
+st.sidebar.markdown('---')
+
+if st.sidebar.button('Sair', use_container_width=True, type='secondary'):
+    logout()  
+    
+st.sidebar.markdown('---')
+
+shop_config = load_shop_config_from_db(user_id=user_id_filter)
 if not shop_config:
     st.error("Não achou dados no banco de dados")
     st.stop()
@@ -80,8 +93,8 @@ if not grupos:
     st.error("Nenhum grupo encontrado")
     st.stop()
 
-grupo_selecionado = st.sidebar.selectbox('Selecione o Grupo', options=grupos, index=0)
-lojas_do_grupo    = list(shop_config[grupo_selecionado].keys())
+grupo_selecionado  = st.sidebar.selectbox('Selecione o Grupo', options=grupos, index=0)
+lojas_do_grupo     = list(shop_config[grupo_selecionado].keys())
 lojas_selecionadas = st.sidebar.multiselect('Selecione Loja(s)', options=lojas_do_grupo, default=lojas_do_grupo)
 
 if not lojas_selecionadas:
@@ -90,7 +103,7 @@ if not lojas_selecionadas:
 
 lojas_configs = [
     {
-        'id': shop_config[grupo_selecionado][loja]['id'],
+        'id':   shop_config[grupo_selecionado][loja]['id'],
         'nome': loja,
         'cnpj': shop_config[grupo_selecionado][loja].get('cnpj', '')
     }
@@ -106,7 +119,7 @@ if not meses_disponiveis:
     st.error("Nenhum mês com dados encontrado")
     st.stop()
 
-meses_options = {mes['mes_display']: mes['mes'] for mes in meses_disponiveis}
+meses_options         = {mes['mes_display']: mes['mes'] for mes in meses_disponiveis}
 default_meses_display = list(meses_options.keys())[:3]
 
 meses_selecionados_display = st.sidebar.multiselect(
@@ -127,7 +140,6 @@ st.sidebar.subheader('Configurações')
 
 top_n_vendedores = st.sidebar.slider('Top N Premiados nos Gráficos', min_value=5, max_value=20, value=10, step=1)
 
-
 with st.spinner('Carregando dados de incentivos...'):
     df_employee = load_incentives_by_employee(lojas_ids, meses_selecionados)
     df_monthly  = load_incentives_by_month_employee(lojas_ids, meses_selecionados)
@@ -142,7 +154,6 @@ if df_employee.empty:
     st.info("Tente selecionar outros meses ou outras lojas")
     st.stop()
 
-
 metrics      = calculate_incentive_summary_metrics(df_employee)
 titulo_lojas = ', '.join(lojas_selecionadas) if len(lojas_selecionadas) < 4 else f"{len(lojas_selecionadas)} Lojas"
 
@@ -152,12 +163,11 @@ st.caption(f'Período: {", ".join(meses_selecionados_display)}')
 st.markdown('---')
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Valor Total",  format_brl(metrics['valor_total']))
-col2.metric("Premiados",    f"{int(metrics['total_vendedores'])}")
-col3.metric("Valor Médio",  format_brl(metrics['valor_medio']))
+col1.metric("Valor Total", format_brl(metrics['valor_total']))
+col2.metric("Premiados",   f"{int(metrics['total_vendedores'])}")
+col3.metric("Valor Médio", format_brl(metrics['valor_medio']))
 
 st.markdown('---')
-
 
 todas_funcoes = extrair_funcoes_unicas(df_employee)
 
@@ -177,14 +187,13 @@ with col_info_filtro:
     df_filtrado = filtrar_por_funcao(df_employee, funcoes_selecionadas)
     st.metric("Premiados exibidos", f"{len(df_filtrado)} / {len(df_employee)}")
 
-ids_filtrados        = df_filtrado['employee_id'].tolist()
-df_monthly_filtrado  = df_monthly[df_monthly['employee_id'].isin(ids_filtrados)]
+ids_filtrados       = df_filtrado['employee_id'].tolist()
+df_monthly_filtrado = df_monthly[df_monthly['employee_id'].isin(ids_filtrados)]
 
 if df_filtrado.empty:
     st.warning("Nenhum premiado encontrado para as funções selecionadas.")
 
 st.markdown('---')
-
 
 st.subheader('Relatório do período')
 
@@ -193,7 +202,6 @@ if not df_monthly_filtrado.empty:
 
     if not df_pivot.empty:
         df_pivot_formatted = format_incentive_monthly_table(df_pivot)
-
         st.dataframe(df_pivot_formatted, use_container_width=True, height=400)
 
         from io import BytesIO
@@ -246,7 +254,6 @@ else:
 
 st.markdown('---')
 
-
 st.subheader('Lista de Consultores e Incentivos')
 
 if not df_filtrado.empty and not df_monthly_filtrado.empty:
@@ -296,7 +303,6 @@ else:
     st.info("Sem dados para exibir com os filtros de função selecionados.")
 
 st.markdown('---')
-
 
 st.subheader('Comparação de Incentivos por Loja')
 

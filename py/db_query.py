@@ -78,11 +78,12 @@ class MetadataQueries:
         INNER JOIN customer c ON c.group_id = g.id
         LEFT JOIN sale s ON s.customer_id = c.id
         WHERE c.active = true
+          AND (%(user_id)s::int IS NULL OR c.user_id = %(user_id)s::int)
         GROUP BY g.id, g.name
         HAVING COUNT(s.id) > 0
         ORDER BY g.name
         """
-    
+
     @staticmethod
     def get_lojas_by_grupo() -> str:
         return """
@@ -95,10 +96,11 @@ class MetadataQueries:
         LEFT JOIN sale s ON s.customer_id = c.id
         WHERE c.group_id = %(grupo_id)s
           AND c.active = true
+          AND (%(user_id)s::int IS NULL OR c.user_id = %(user_id)s::int)
         GROUP BY c.id, c.fantasy_name, c.cnpj
         ORDER BY c.fantasy_name
         """
-    
+
     @staticmethod
     def get_all_lojas() -> str:
         return """
@@ -113,11 +115,12 @@ class MetadataQueries:
         LEFT JOIN groups g ON c.group_id = g.id
         LEFT JOIN sale s ON s.customer_id = c.id
         WHERE c.active = true
+          AND (%(user_id)s::int IS NULL OR c.user_id = %(user_id)s::int)
         GROUP BY c.id, c.fantasy_name, c.cnpj, c.group_id, g.name
         HAVING COUNT(s.id) > 0
         ORDER BY g.name, c.fantasy_name
         """
-    
+
     @staticmethod
     def get_date_range() -> str:
         return """
@@ -129,7 +132,7 @@ class MetadataQueries:
 
 
 class IncentiveQueries:
-    
+
     @staticmethod
     def get_incentives_by_employee() -> str:
         return """
@@ -166,7 +169,7 @@ class IncentiveQueries:
         GROUP BY e.id, i.cpf, e.name, c.fantasy_name, g.name
         ORDER BY valor_total_incentivos DESC
         """
-    
+
     @staticmethod
     def get_incentives_by_month_employee() -> str:
         return """
@@ -193,7 +196,7 @@ class IncentiveQueries:
         GROUP BY e.id, e.name, i.cpf, mes, mes_display
         ORDER BY e.name, mes 
         """
-    
+
     @staticmethod
     def get_available_months() -> str:
         return """
@@ -206,7 +209,7 @@ class IncentiveQueries:
         GROUP BY mes, mes_display
         ORDER BY mes DESC
         """
-    
+
     @staticmethod
     def get_incentives_details() -> str:
         return """
