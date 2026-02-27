@@ -11,6 +11,23 @@ from data_transformer import DataTransformer, GroupHierarchyBuilder, safe_int
 from db_query import IncentiveQueries
 
 
+def abreviar_nome(nome: str) -> str:
+    if not nome or not isinstance(nome, str):
+        return nome
+    
+    PARTICULAS = {'de', 'do', 'da', 'dos', 'das'}
+    partes = nome.strip().split()
+    
+    if len(partes) <= 2:
+        return ' '.join(partes)
+    
+    if partes[1].lower() in PARTICULAS:
+        return ' '.join(partes[:3])
+    
+    return ' '.join(partes[:2])
+
+
+
 @st.cache_data(ttl=300)
 def load_shop_config_from_db() -> dict:
     try:
@@ -40,15 +57,6 @@ def load_sales_from_db(
     data_inicio: date,
     data_fim: date
 ) -> pd.DataFrame:
-    """
-    Args:
-        lojas_ids: Lista de IDs das lojas (customer.id)
-        data_inicio: Data inicial do período
-        data_fim: Data final do período
-    
-    Returns:
-        DataFrame normalizado com dados de vendas
-    """
     if not lojas_ids:
         st.warning("Nenhuma loja selecionada")
         return pd.DataFrame()
@@ -107,6 +115,8 @@ def calcular_metricas_vendedor(df: pd.DataFrame) -> pd.DataFrame:
     
     metricas.rename(columns={'Vendedor': 'Consultor'}, inplace=True)
     
+    metricas['Consultor'] = metricas['Consultor'].apply(abreviar_nome)
+    
     return metricas
 
 
@@ -161,19 +171,6 @@ def load_data(
     data_inicio: date,
     data_fim: date
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str]]:
-    """
-    Args:
-        lojas_configs: Lista de dicts com {'id': int, 'nome': str, ...}
-        data_inicio: Data inicial do período
-        data_fim: Data final do período
-    
-    Returns:
-        Tupla com:
-        - df_metricas_vendedor: Métricas por vendedor
-        - df_metricas_produto: Métricas por produto
-        - df_metricas_temporais: Evolução temporal
-        - lista_consultores: Lista de vendedores únicos
-    """
     lojas_ids = [safe_int(loja['id']) for loja in lojas_configs]
 
     df_master = load_sales_from_db(lojas_ids, data_inicio, data_fim)
@@ -190,7 +187,7 @@ def load_data(
     df_metricas_produto = calcular_metricas_produto(df_master)
     df_metricas_temporais = calcular_metricas_temporais(df_master)
     
-    lista_consultores = sorted(df_master['Vendedor'].unique().tolist())
+    lista_consultores = sorted(df_metricas_vendedor['Consultor'].unique().tolist())
     
     if st.secrets.get('settings', {}).get('debug_mode', False):
         with st.expander("Debug: Dados Carregados", expanded=False):
@@ -270,6 +267,9 @@ def load_incentives_by_employee(
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        if 'vendedor' in df.columns:
+            df['vendedor'] = df['vendedor'].apply(abreviar_nome)
+        
         return df
         
     except Exception as e:
@@ -305,6 +305,9 @@ def load_incentives_by_month_employee(
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        if 'vendedor' in df.columns:
+            df['vendedor'] = df['vendedor'].apply(abreviar_nome)
         
         return df
         
